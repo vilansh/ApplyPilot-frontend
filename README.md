@@ -1,4 +1,3 @@
-
 # 🛫 ApplyPilot – AI-Powered Cover Letter Generator & Gmail Outreach Automation
 
 **ApplyPilot** is your personal AI co-pilot for job applications.  
@@ -48,7 +47,7 @@ Designed for job seekers, freelance hunters, and cold outreach warriors — Appl
 
 ## 📁 Folder Structure
 
-```
+\`\`\`
 
 applypilot/
 ├── client/              # React frontend
@@ -70,7 +69,7 @@ applypilot/
 ├── .env.example
 └── README.md
 
-````
+\`\`\``
 
 ---
 
@@ -94,11 +93,11 @@ Upload an Excel or CSV file with the following headers:
 - Create a project, enable Google Sign-In
 - Copy config keys and paste into `client/.env`
 
-```env
+\`\`\`env
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
 VITE_FIREBASE_PROJECT_ID=...
-````
+\`\`\``
 
 ### 2. Gmail API
 
@@ -108,11 +107,11 @@ VITE_FIREBASE_PROJECT_ID=...
 * Get Client ID and Secret
 * Add this to `server/.env`:
 
-```env
+\`\`\`env
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GMAIL_REDIRECT_URI=http://localhost:5000/auth/callback
-```
+\`\`\`
 
 ---
 
@@ -120,7 +119,7 @@ GMAIL_REDIRECT_URI=http://localhost:5000/auth/callback
 
 `shared/prompts/coverLetter.hbs`
 
-```hbs
+\`\`\`hbs
 Dear {{name}},
 
 I'm writing to express interest in the {{jobTitle}} position at {{company}}. With my experience in {{user.skill}}, I’m confident in my ability to contribute effectively to your team.
@@ -129,7 +128,7 @@ Looking forward to the opportunity to connect further.
 
 Sincerely,  
 {{user.fullName}}
-```
+\`\`\`
 
 ---
 
@@ -146,26 +145,26 @@ Sincerely,
 
 ### 1. Clone the Repo
 
-```bash
+\`\`\`bash
 git clone https://github.com/your-username/applypilot.git
 cd applypilot
-```
+\`\`\`
 
 ### 2. Setup Frontend
 
-```bash
+\`\`\`bash
 cd client
 npm install
 npm run dev
-```
+\`\`\`
 
 ### 3. Setup Backend
 
-```bash
+\`\`\`bash
 cd ../server
 npm install
 node index.js
-```
+\`\`\`
 
 ---
 
@@ -173,21 +172,21 @@ node index.js
 
 ### client/.env
 
-```env
+\`\`\`env
 VITE_FIREBASE_API_KEY=your_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=your_project_id
-```
+\`\`\`
 
 ### server/.env
 
-```env
+\`\`\`env
 OPENAI_API_KEY=sk-...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GMAIL_REDIRECT_URI=http://localhost:5000/auth/callback
 SESSION_SECRET=securestring
-```
+\`\`\`
 
 ---
 
@@ -216,11 +215,11 @@ SESSION_SECRET=securestring
 
 Pull requests are welcome. Please create an issue first if you want to suggest a feature or report a bug.
 
-```bash
+\`\`\`bash
 git checkout -b feature/my-feature
 git commit -m "Add new feature"
 git push origin feature/my-feature
-```
+\`\`\`
 
 ---
 
@@ -239,4 +238,4 @@ Built with ❤️ using:
 * [Firebase](https://firebase.google.com/)
 * [Google Gmail API](https://developers.google.com/gmail/api)
 
-```
+\`\`\`
