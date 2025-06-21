@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 203 23% 30%;
+    --card: 0 0% 100%;
+    --card-foreground: 203 23% 30%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 203 23% 30%;
+    --primary: 203 23% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 83.5%;
+    --secondary-foreground: 203 23% 30%;
+    --muted: 0 0% 83.5%;
+    --muted-foreground: 203 23% 30%;
+    --accent: 0 0% 83.5%;
+    --accent-foreground: 203 23% 30%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 83.5%;
+    --input: 0 0% 83.5%;
+    --ring: 203 23% 30%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer components {
+  .premium-glow {
+    box-shadow: 0 0 20px rgba(23, 55, 68, 0.1), 0 0 40px rgba(23, 55, 68, 0.05);
+  }
+
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(213, 213, 213, 0.3);
+  }
+
+  .subtle-shadow {
+    box-shadow: 0 4px 6px -1px rgba(23, 55, 68, 0.1), 0 2px 4px -1px rgba(23, 55, 68, 0.06);
+  }
+
+  .elegant-shadow {
+    box-shadow: 0 10px 15px -3px rgba(23, 55, 68, 0.1), 0 4px 6px -2px rgba(23, 55, 68, 0.05);
+  }
+
+  .premium-shadow {
+    box-shadow: 0 20px 25px -5px rgba(23, 55, 68, 0.1), 0 10px 10px -5px rgba(23, 55, 68, 0.04);
+  }
+
+  .floating-animation {
+    animation: floating 3s ease-in-out infinite;
+  }
+
+  @keyframes floating {
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Custom scrollbar with theme colors */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(213, 213, 213, 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(23, 55, 68, 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(23, 55, 68, 0.5);
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Theme-specific focus states */
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #173744;
+  outline-offset: 2px;
+}
+
+/* Selection styling with theme colors */
+::selection {
+  background: rgba(23, 55, 68, 0.2);
+  color: #173744;
+}
