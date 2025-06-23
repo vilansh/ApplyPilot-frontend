@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { Progress } from "@/components/ui/progress"
+import * as XLSX from "xlsx"
 import {
   Sidebar,
   SidebarContent,
@@ -45,13 +46,8 @@ import {
   ChevronDown,
   Sparkles,
 } from "lucide-react"
-
-interface UploadedRow {
-  name: string
-  company: string
-  role: string
-  email: string
-}
+import { auth, provider } from "@/lib/firebase"
+import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth"
 
 interface UserProfile {
   name: string
@@ -59,14 +55,21 @@ interface UserProfile {
   avatar: string
 }
 
+type UploadedRow = {
+  name: string
+  email: string
+  company: string
+  jobTitle: string
+}
+
 const sampleData: UploadedRow[] = [
-  { name: "John Smith", company: "TechCorp", role: "Software Engineer", email: "john@techcorp.com" },
-  { name: "Sarah Johnson", company: "DataFlow", role: "Product Manager", email: "sarah@dataflow.com" },
-  { name: "Mike Chen", company: "StartupXYZ", role: "Frontend Developer", email: "mike@startupxyz.com" },
-  { name: "Emily Davis", company: "CloudSoft", role: "UX Designer", email: "emily@cloudsoft.com" },
-  { name: "Alex Rodriguez", company: "InnovateLab", role: "Data Scientist", email: "alex@innovatelab.com" },
-  { name: "Lisa Wang", company: "FinTech Pro", role: "Backend Developer", email: "lisa@fintechpro.com" },
-  { name: "David Brown", company: "AI Solutions", role: "ML Engineer", email: "david@aisolutions.com" },
+  { name: "John Smith", company: "TechCorp", jobTitle: "Software Engineer", email: "john@techcorp.com" },
+  { name: "Sarah Johnson", company: "DataFlow", jobTitle: "Product Manager", email: "sarah@dataflow.com" },
+  { name: "Mike Chen", company: "StartupXYZ", jobTitle: "Frontend Developer", email: "mike@startupxyz.com" },
+  { name: "Emily Davis", company: "CloudSoft", jobTitle: "UX Designer", email: "emily@cloudsoft.com" },
+  { name: "Alex Rodriguez", company: "InnovateLab", jobTitle: "Data Scientist", email: "alex@innovatelab.com" },
+  { name: "Lisa Wang", company: "FinTech Pro", jobTitle: "Backend Developer", email: "lisa@fintechpro.com" },
+  { name: "David Brown", company: "AI Solutions", jobTitle: "ML Engineer", email: "david@aisolutions.com" },
 ]
 
 export default function ApplyPilotDashboard() {
@@ -78,67 +81,403 @@ export default function ApplyPilotDashboard() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [resumeFileName, setResumeFileName] = useState<string>("")
+  const [resumeText, setResumeText] = useState<string>("")
 
-  const handleGoogleSignIn = () => {
-    setTimeout(() => {
-      setIsLoggedIn(true)
-      setUserProfile({
-        name: "Vilansh Sharma",
-        email: "vilansh@example.com",
-        avatar: "/placeholder.svg?height=32&width=32",
-      })
-      toast({
-        title: "Welcome to ApplyPilot!",
-        description: "Successfully signed in with Google",
-      })
-    }, 1000)
-  }
-
-  const handleSignOut = () => {
-    setIsLoggedIn(false)
-    setUserProfile(null)
-    setUploadedData([])
-    toast({
-      title: "Signed out successfully",
-      description: "See you next time!",
-    })
-  }
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setIsUploading(true)
-      setUploadProgress(0)
-
-      const interval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval)
-            setIsUploading(false)
-            setUploadedData(sampleData)
-            toast({
-              title: "File uploaded successfully!",
-              description: `Processed ${sampleData.length} candidate entries`,
-            })
-            return 100
-          }
-          return prev + 10
+  // Listen for authentication state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user: FirebaseUser | null) => {
+      console.log("Auth state changed:", user ? "User logged in" : "User logged out")
+      if (user) {
+        console.log("User data:", {
+          displayName: user.displayName,
+          email: user.email,
+          photoURL: user.photoURL
         })
-      }, 200)
+        setIsLoggedIn(true)
+        setUserProfile({
+          name: user.displayName || "User",
+          email: user.email || "",
+          avatar: user.photoURL || "/placeholder.svg?height=32&width=32",
+        })
+      } else {
+        setIsLoggedIn(false)
+        setUserProfile(null)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsSigningIn(true)
+      const result = await signInWithPopup(auth, provider)
+      const user = result.user
+      
+      // Send user data to backend
+      try {
+        const response = await fetch("http://localhost:5000/api/auth/google-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name: user.displayName,
+            email: user.email,
+            uid: user.uid,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Backend error: ${response.status}`)
+        }
+
+        const backendData = await response.json()
+        console.log("Backend response:", backendData)
+        
+        toast({
+          title: "Welcome to ApplyPilot!",
+          description: `Successfully signed in as ${user.displayName}`,
+        })
+
+        // Redirect to Gmail OAuth after successful login
+        window.location.href = "http://localhost:5000/auth/google"
+      } catch (backendError) {
+        console.error("Backend communication error:", backendError)
+        // Still show success toast even if backend fails
+        toast({
+          title: "Welcome to ApplyPilot!",
+          description: `Successfully signed in as ${user.displayName}`,
+        })
+        // Optionally show a warning about backend sync
+        toast({
+          title: "Note",
+          description: "Signed in successfully, but there was an issue syncing with the server.",
+          variant: "default",
+        })
+        
+        // Still redirect to Gmail OAuth even if backend fails
+        window.location.href = "http://localhost:5000/auth/google"
+      }
+    } catch (error: any) {
+      console.error("Sign-in error:", error)
+      toast({
+        title: "Sign-in failed",
+        description: error.message || "An error occurred during sign-in",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSigningIn(false)
     }
   }
 
-  const handleGenerateAndSend = () => {
-    setIsGenerating(true)
-    setTimeout(() => {
-      setIsGenerating(false)
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth)
+      setUploadedData([])
       toast({
-        title: "Emails sent successfully!",
-        description: `${uploadedData.length} personalized cover letters delivered`,
+        title: "Signed out successfully",
+        description: "See you next time!",
       })
-    }, 3000)
+    } catch (error: any) {
+      console.error("Sign-out error:", error)
+      toast({
+        title: "Sign-out failed",
+        description: error.message || "An error occurred during sign-out",
+        variant: "destructive",
+      })
+    }
   }
 
+  const handleMultiFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length < 2) return;
+
+    const excelFile = Array.from(files).find(file => file.name.endsWith(".xlsx") || file.name.endsWith(".csv"));
+    const resumeFile = Array.from(files).find(file => file.name.endsWith(".pdf") || file.name.endsWith(".docx"));
+
+    if (!excelFile || !resumeFile) {
+      toast({
+        title: "Missing Files",
+        description: "Please upload both Excel and Resume files.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("excel", excelFile);
+    formData.append("resume", resumeFile);
+
+    setIsUploading(true);
+
+    try {
+      const response = await fetch("http://localhost:5000/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+
+      const result = await response.json();
+      setUploadedData(result.results); // optionally display success/failure info per contact
+      toast({
+        title: "Upload & Send Successful",
+        description: `Processed and emailed ${result.results.length} contacts.`,
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Upload failed",
+        description: "An error occurred during file upload.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleExcelUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      toast({
+        title: "No file selected",
+        description: "Please upload a valid Excel or CSV file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if it's an Excel or CSV file
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.csv')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload an Excel (.xlsx) or CSV file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+          const parsedData: UploadedRow[] = (json as any[]).map((row, index) => {
+            const name = row["Name"]?.trim();
+            const email = row["Email"]?.trim();
+            const company = row["Company"]?.trim();
+            const jobTitle = row["JobTitle"]?.trim();
+
+            if (!name || !email || !company || !jobTitle) {
+              throw new Error(`Missing fields in row ${index + 2}`);
+            }
+
+            return { name, email, company, jobTitle };
+          });
+
+          setUploadedData(parsedData);
+          toast({
+            title: "Excel file uploaded successfully! ✅",
+            description: `Parsed ${parsedData.length} candidate entries.`,
+          });
+        } catch (err: any) {
+          console.error("Excel Parse Error:", err);
+          toast({
+            title: "Failed to parse Excel file",
+            description: err.message || "Make sure all columns are present: Name, Email, Company, JobTitle.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error("File reading error:", error);
+      toast({
+        title: "File reading failed",
+        description: "Could not read the Excel file.",
+        variant: "destructive",
+      });
+      setIsUploading(false);
+    }
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain'
+    ]
+    
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a PDF, DOC, DOCX, or TXT file.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload a file smaller than 5MB.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setResumeFile(file)
+    setResumeFileName(file.name)
+
+    // Extract text from PDF if it's a PDF file
+    if (file.type === 'application/pdf') {
+      // For now, just set the file without text extraction to avoid SSR issues
+      setResumeText("");
+      toast({
+        title: "Resume uploaded ✅",
+        description: `${file.name} has been uploaded successfully.`,
+      });
+    } else {
+      // For non-PDF files, just set the file
+      setResumeText("");
+      toast({
+        title: "Resume uploaded ✅",
+        description: `${file.name} has been uploaded successfully.`,
+      });
+    }
+  }
+
+  const generatePrompt = (recipient: UploadedRow, resumeText: string) => {
+    return `Generate a personalized, professional cover letter for a job application. Use the information below. Do NOT use any placeholders like [Your Name], [Your Address], [Date], etc. Only use the information provided. If information is missing, omit that part. Write the letter as if it is ready to send.
+
+Resume:
+${resumeText}
+
+Recipient:
+- Name: ${recipient.name}
+- Company: ${recipient.company}
+- Job Title: ${recipient.jobTitle}
+
+The tone should be enthusiastic and concise, tailored to the company and job role.`;
+  };
+
+  const handleGenerateAndSend = async () => {
+    if (!resumeFile) {
+      toast({
+        title: "Upload resume first",
+        description: "Please upload a resume before sending emails.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    if (!geminiKey) {
+      toast({
+        title: "Gemini API key missing",
+        description: "Please set NEXT_PUBLIC_GEMINI_API_KEY in your environment variables.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const recipient of uploadedData) {
+      const prompt = generatePrompt(recipient, resumeText);
+      try {
+        const aiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [{ text: prompt }],
+                },
+              ],
+            }),
+          }
+        );
+
+        const data = await aiResponse.json();
+        console.log("📩 Gemini API raw response:", data);
+
+        const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!generatedText) {
+          failCount++;
+          toast({
+            title: `Failed to generate cover letter for ${recipient.name}`,
+            description: "Gemini did not return a valid cover letter.",
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append("resume", resumeFile);
+        formData.append("recipient", JSON.stringify(recipient));
+        formData.append("generatedText", generatedText);
+
+        const backendRes = await fetch("http://localhost:5000/send-email", {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        });
+
+        const result = await backendRes.text();
+        console.log("✅ Email backend response:", result);
+        successCount++;
+      } catch (err) {
+        failCount++;
+        console.error("❌ Error generating/sending email for", recipient.name, err);
+        toast({
+          title: `Error for ${recipient.name}`,
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      }
+    }
+    setIsGenerating(false);
+    if (successCount > 0) {
+      toast({
+        title: "Cover letters sent!",
+        description: `Successfully sent ${successCount} cover letter${successCount > 1 ? "s" : ""}. ${failCount > 0 ? failCount + " failed." : ""}`,
+        variant: "default",
+      });
+    } else {
+      toast({
+        title: "No cover letters sent",
+        description: "All attempts failed. Please check your data and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "history", label: "History", icon: History },
@@ -266,32 +605,52 @@ export default function ApplyPilotDashboard() {
 
               <Button
                 onClick={handleGoogleSignIn}
-                className="bg-blue-600 hover:bg-blue-700 text-white shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105 rounded-2xl px-12 py-6 text-lg font-semibold"
+                disabled={isSigningIn}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105 rounded-2xl px-12 py-6 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 size="lg"
               >
-                <svg className="w-6 h-6 mr-3" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Sign in with Google
+                {isSigningIn ? (
+                  <>
+                    <Loader2 className="w-6 h-6 mr-3 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-6 h-6 mr-3" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    Sign in with Google
+                  </>
+                )}
               </Button>
             </div>
           </div>
+          <footer>
+            <div className="px-6 py-6 text-center">
+              <div className="w-full h-px bg-gradient-to-r from-transparent via-[#D5D5D5]/50 to-transparent mb-4"></div>
+              <p className="text-sm text-[#173744]/60">
+                Made with <span className="text-red-500 animate-pulse">❤️</span> by{" "}
+                <span className="font-semibold text-[#173744]">Vilansh Sharma</span>
+              </p>
+            </div>
+          </footer>
         </div>
+        
       )
     }
 
@@ -339,7 +698,7 @@ export default function ApplyPilotDashboard() {
                     id="file-upload"
                     type="file"
                     accept=".xlsx,.csv"
-                    onChange={handleFileUpload}
+                    onChange={handleExcelUpload}
                     className="hidden"
                   />
                 </div>
@@ -352,6 +711,65 @@ export default function ApplyPilotDashboard() {
                     <span className="text-[#173744]/60">{uploadProgress}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-3" />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80 backdrop-blur-xl border border-[#D5D5D5]/30 shadow-xl">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-3 text-[#173744]">
+              <FileText className="w-6 h-6" />
+              <span>Upload Your Resume</span>
+            </CardTitle>
+            <CardDescription className="text-[#173744]/70">
+              Upload your resume to personalize cover letters (PDF, DOC, DOCX, TXT)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div className="relative group">
+                <div className="border-2 border-dashed border-[#D5D5D5] rounded-3xl p-12 text-center hover:border-[#173744]/30 transition-all duration-300 bg-[#D5D5D5]/10 group-hover:bg-[#D5D5D5]/20">
+                  <div className="w-20 h-20 mx-auto mb-6 bg-[#D5D5D5]/30 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 border border-[#D5D5D5]/50">
+                    <FileText className="w-10 h-10 text-[#173744]" />
+                  </div>
+                  <Label htmlFor="resume-upload" className="cursor-pointer">
+                    <span className="text-xl font-semibold text-[#173744] block mb-3">
+                      Click to upload or drag and drop
+                    </span>
+                    <span className="text-sm text-[#173744]/60">PDF, DOC, DOCX, or TXT files only • Max 5MB</span>
+                  </Label>
+                  <Input
+                    id="resume-upload"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={handleResumeUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              {resumeFileName && (
+                <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <FileText className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-800">{resumeFileName}</p>
+                      <p className="text-sm text-green-600">Resume uploaded successfully</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setResumeFile(null)
+                      setResumeFileName("")
+                    }}
+                    className="text-green-600 hover:text-green-800 hover:bg-green-100"
+                  >
+                    Remove
+                  </Button>
                 </div>
               )}
             </div>
@@ -378,7 +796,7 @@ export default function ApplyPilotDashboard() {
                     <TableRow className="border-b border-[#D5D5D5]/30">
                       <TableHead className="font-semibold text-[#173744]">Name</TableHead>
                       <TableHead className="font-semibold text-[#173744]">Company</TableHead>
-                      <TableHead className="font-semibold text-[#173744]">Role</TableHead>
+                      <TableHead className="font-semibold text-[#173744]">Job Title</TableHead>
                       <TableHead className="font-semibold text-[#173744]">Email</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -392,7 +810,7 @@ export default function ApplyPilotDashboard() {
                       >
                         <TableCell className="font-medium text-[#173744]">{row.name}</TableCell>
                         <TableCell className="text-[#173744]/70">{row.company}</TableCell>
-                        <TableCell className="text-[#173744]/70">{row.role}</TableCell>
+                        <TableCell className="text-[#173744]/70">{row.jobTitle}</TableCell>
                         <TableCell className="text-[#173744]/70">{row.email}</TableCell>
                       </TableRow>
                     ))}
