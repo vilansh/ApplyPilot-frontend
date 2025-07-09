@@ -16,7 +16,7 @@ ApplyPilot lets job seekers instantly generate tailored cover letters from their
 - 🔐 .env config for HuggingFace or Gemini API keys
 
 ---
-
+https://apply-pilot-online.vercel.app/
 ## 📁 Project Structure
 
 ```
